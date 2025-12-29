@@ -6,7 +6,7 @@ The projects demonstrate the transition from traditional signal processing metho
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ### 1. Homework 1: Waveform Classifier (FFT + ANN)
 **Path:** `Homework1/waveform_classifier.py`
@@ -34,7 +34,7 @@ This project solves the same classification problem but adopts a neuromorphic ap
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -64,7 +64,7 @@ Once running, open your browser and navigate to `http://127.0.0.1:5000` (or the 
 
 ---
 
-## 🧠 Concepts Covered
+## Concepts Covered
 
 | Concept | Homework 1 (ANN) | Homework 2 (SNN) |
 | :--- | :--- | :--- |

@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neuromorphic OCR - İTÜ Motor Cortical Network</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #001a33 0%, #00447C 50%, #002244 100%);
+            background-attachment: fixed;
+            min-height: 100vh;
+            color: #fff;
+            padding: 30px;
+        }
+
+        html {
+            background: #001a33;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .header-logo {
+            width: 100px;
+            height: 100px;
+            object-fit: contain;
+            filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
+        }
+
+        .header-text h1 {
+            font-size: 2.6rem;
+            font-weight: 700;
+            color: #FFFFFF;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        @keyframes shimmer {
+
+            0%,
+            100% {
+                filter: brightness(1);
+            }
+
+            50% {
+                filter: brightness(1.15);
+            }
+        }
+
+        .header-text p {
+            color: #569FD3;
+            font-size: 0.95rem;
+            font-weight: 400;
+        }
+
+        /* Main Layout */
+        .main-layout {
+            display: flex;
+            gap: 30px;
+            align-items: flex-start;
+        }
+
+        /* Glass Panel */
+        .glass-panel {
+            background: rgba(0, 68, 124, 0.3);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(181, 151, 89, 0.3);
+            border-radius: 20px;
+            padding: 25px;
+        }
+
+        /* Left Column */
+        .input-section {
+            flex: 0 0 340px;
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #B59759;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 20px;
+            background: linear-gradient(180deg, #B59759, #d4b06a);
+            border-radius: 2px;
+        }
+
+        /* Canvas */
+        .canvas-container {
+            position: relative;
+            width: 280px;
+            height: 280px;
+            margin: 0 auto 25px;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow:
+                0 0 0 2px rgba(181, 151, 89, 0.4),
+                0 10px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Grid overlay */
+        .canvas-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0.15;
+            background-image:
+                linear-gradient(rgba(181, 151, 89, 0.5) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(181, 151, 89, 0.5) 1px, transparent 1px);
+            background-size: calc(100% / 16) calc(100% / 16);
+        }
+
+        canvas#drawCanvas {
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+            background: #001122;
+        }
+
+        .grid-info {
+            text-align: center;
+            font-size: 0.75rem;
+            color: #569FD3;
+            margin-bottom: 15px;
+        }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-label {
+            font-size: 0.85rem;
+            color: #569FD3;
+            font-weight: 500;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        input[type="text"] {
+            flex: 0 0 80px;
+            padding: 12px 16px;
+            border: 1px solid rgba(181, 151, 89, 0.4);
+            border-radius: 12px;
+            background: rgba(0, 68, 124, 0.3);
+            color: #B59759;
+            font-size: 1.2rem;
+            font-weight: 700;
+            text-align: center;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #B59759;
+            box-shadow: 0 0 20px rgba(181, 151, 89, 0.3);
+        }
+
+        /* Buttons */
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 12px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-clear {
+            background: rgba(86, 159, 211, 0.2);
+            color: #569FD3;
+            border: 1px solid rgba(86, 159, 211, 0.3);
+        }
+
+        .btn-clear:hover {
+            background: rgba(86, 159, 211, 0.3);
+        }
+
+        .btn-train {
+            flex: 1;
+            background: linear-gradient(135deg, #B59759 0%, #8a7343 100%);
+            color: #001a33;
+            box-shadow: 0 4px 15px rgba(181, 151, 89, 0.3);
+        }
+
+        .btn-train:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(181, 151, 89, 0.4);
+        }
+
+        .btn-predict {
+            background: linear-gradient(135deg, #00447C 0%, #003366 100%);
+            color: #B59759;
+            border: 2px solid rgba(181, 151, 89, 0.5);
+            font-size: 1.1rem;
+            padding: 16px;
+        }
+
+        .btn-predict:hover {
+            transform: translateY(-2px);
+            border-color: #B59759;
+        }
+
+        .btn-reset {
+            background: rgba(180, 80, 80, 0.2);
+            color: #e07070;
+            border: 1px solid rgba(180, 80, 80, 0.3);
+            font-size: 0.8rem;
+            padding: 10px;
+        }
+
+        /* Feedback Panel */
+        .feedback-panel {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(0, 26, 51, 0.4);
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .feedback-title {
+            font-size: 0.85rem;
+            color: #569FD3;
+            margin-bottom: 10px;
+        }
+
+        .feedback-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-correct {
+            flex: 1;
+            background: rgba(100, 180, 100, 0.3);
+            color: #7fb069;
+            border: 1px solid rgba(100, 180, 100, 0.5);
+        }
+
+        .btn-correct:hover {
+            background: rgba(100, 180, 100, 0.5);
+        }
+
+        .btn-wrong {
+            flex: 1;
+            background: rgba(180, 100, 100, 0.3);
+            color: #e07070;
+            border: 1px solid rgba(180, 100, 100, 0.5);
+        }
+
+        .btn-wrong:hover {
+            background: rgba(180, 100, 100, 0.5);
+        }
+
+        .wrong-input-panel {
+            margin-top: 10px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .wrong-input-panel input {
+            flex: 1;
+            padding: 8px 12px;
+            font-size: 1rem;
+        }
+
+        .btn-submit-correction {
+            background: linear-gradient(135deg, #B59759 0%, #8a7343 100%);
+            color: #001a33;
+            padding: 8px 16px;
+        }
+
+        .feedback-status {
+            margin-top: 8px;
+            font-size: 0.8rem;
+            color: #7fb069;
+        }
+
+        /* Divider */
+        .divider {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(181, 151, 89, 0.4), transparent);
+            margin: 5px 0;
+        }
+
+        /* Result */
+        .result-display {
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        #predictionResult {
+            font-size: 3.5rem;
+            font-weight: 700;
+            color: #B59759;
+            text-shadow: 0 0 20px rgba(181, 151, 89, 0.4);
+        }
+
+        #confidenceResult {
+            font-size: 0.9rem;
+            color: #569FD3;
+        }
+
+        /* Trained Classes */
+        .known-classes {
+            margin-top: 15px;
+            padding: 12px;
+            background: rgba(0, 26, 51, 0.4);
+            border-radius: 12px;
+        }
+
+        .known-classes-title {
+            color: #569FD3;
+            margin-bottom: 8px;
+            font-size: 0.8rem;
+        }
+
+        .known-classes-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .class-tag {
+            padding: 6px 14px;
+            background: linear-gradient(135deg, rgba(181, 151, 89, 0.2), rgba(181, 151, 89, 0.1));
+            border: 1px solid rgba(181, 151, 89, 0.4);
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #B59759;
+        }
+
+        /* Right Column: Visualization */
+        .visualization-section {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .plot-container {
+            display: flex;
+            flex-direction: column;
+            min-height: 280px;
+        }
+
+        .plot-container.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .plot-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .plot-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #B59759;
+        }
+
+        .plot-badge {
+            font-size: 0.7rem;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: rgba(86, 159, 211, 0.2);
+            color: #569FD3;
+        }
+
+        .canvas-wrapper {
+            flex: 1;
+            border-radius: 12px;
+            overflow: hidden;
+            background: rgba(0, 26, 51, 0.5);
+        }
+
+        canvas.chart {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        .stats {
+            margin-top: 10px;
+            padding: 10px 15px;
+            background: rgba(0, 26, 51, 0.4);
+            border-radius: 10px;
+            font-size: 0.75rem;
+            color: #569FD3;
+            font-family: 'SF Mono', monospace;
+            word-break: break-all;
+        }
+
+        /* Architecture Info */
+        .arch-info {
+            margin-top: 20px;
+            padding: 12px;
+            background: rgba(0, 26, 51, 0.3);
+            border-radius: 10px;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .arch-info code {
+            color: #569FD3;
+        }
+
+        /* Word Test */
+        .word-canvas-container {
+            width: 100%;
+            max-width: 560px;
+            height: 100px;
+            margin: 10px auto;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 0 0 2px rgba(181, 151, 89, 0.4);
+        }
+
+        #wordCanvas {
+            width: 100%;
+            height: 100%;
+            background: #001122;
+            cursor: crosshair;
+        }
+
+        .word-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .word-result {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(0, 26, 51, 0.5);
+            border-radius: 12px;
+            text-align: center;
+            min-height: 50px;
+        }
+
+        .word-result .letters {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #B59759;
+            letter-spacing: 8px;
+        }
+
+        .word-result .details {
+            font-size: 0.8rem;
+            color: #569FD3;
+            margin-top: 5px;
+        }
+
+        @media (max-width: 1100px) {
+            .main-layout {
+                flex-direction: column;
+            }
+
+            .input-section {
+                width: 100%;
+            }
+
+            .visualization-section {
+                grid-template-columns: 1fr;
+            }
+
+            .plot-container.full-width {
+                grid-column: 1;
+            }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="/static/logo.png" alt="İTÜ" class="header-logo" onerror="this.style.display='none'">
+            <div class="header-text">
+                <h1>Neuromorphic OCR</h1>
+            </div>
+        </div>
+
+        <div class="main-layout">
+            <div class="input-section glass-panel">
+                <div class="section-title">Draw Character</div>
+
+                <div class="canvas-container">
+                    <canvas id="drawCanvas" width="280" height="280"></canvas>
+                    <div class="canvas-grid"></div>
+                </div>
+                <div class="grid-info">16×16 Poisson-encoded input (256 neurons)</div>
+
+                <div class="controls">
+                    <button class="btn-clear" onclick="clearCanvas()">Clear Canvas</button>
+
+                    <div class="control-group">
+                        <span class="control-label">Training Label</span>
+                        <div class="input-row">
+                            <input type="text" id="trainLabel" placeholder="A" maxlength="3">
+                            <button class="btn-train" onclick="train()">Train (10x)</button>
+                        </div>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <button class="btn-predict" onclick="predict()">⚡ PREDICT</button>
+
+                    <div class="result-display">
+                        <div id="predictionResult">-</div>
+                        <div id="confidenceResult"></div>
+                    </div>
+
+                    <!-- Feedback Panel -->
+                    <div id="feedbackPanel" class="feedback-panel" style="display: none;">
+                        <div class="feedback-title">Was this correct?</div>
+                        <div class="feedback-buttons">
+                            <button class="btn-correct" onclick="feedbackCorrect()">✓ Correct</button>
+                            <button class="btn-wrong" onclick="showWrongInput()">✗ Wrong</button>
+                        </div>
+                        <div id="wrongInputPanel" class="wrong-input-panel" style="display: none;">
+                            <input type="text" id="correctLabel" placeholder="Correct label" maxlength="3">
+                            <button class="btn-submit-correction" onclick="feedbackWrong()">Submit</button>
+                        </div>
+                        <div id="feedbackStatus" class="feedback-status"></div>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <button class="btn-reset" onclick="resetNetwork()">Reset Network</button>
+
+
+                    <div class="known-classes">
+                        <div class="known-classes-title">Trained Classes</div>
+                        <div class="known-classes-list" id="knownClassesList">
+                            <span style="color: rgba(86, 159, 211, 0.5);">None yet</span>
+                        </div>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <!-- Word Test Section -->
+                    <div class="section-title" style="margin-top: 15px;">Word Test</div>
+                    <div class="word-canvas-container">
+                        <canvas id="wordCanvas" width="560" height="100"></canvas>
+                    </div>
+                    <div class="word-controls">
+                        <button class="btn-clear" onclick="clearWordCanvas()" style="flex:1;">Clear</button>
+                        <button class="btn-predict" onclick="testWord()" style="flex:2;">🔤 TEST WORD</button>
+                    </div>
+                    <div id="wordResult" class="word-result"></div>
+
+                    <div class="arch-info">
+                        <strong>Architecture:</strong> Exemplar-based K-NN<br>
+                        <code>80 samples/class</code>, <code>Smart Pruning</code>,<br>
+                        <code>Cosine Similarity</code> matching
+                    </div>
+                </div>
+            </div>
+
+            <div class="visualization-section">
+                <div class="plot-container glass-panel">
+                    <div class="plot-header">
+                        <span class="plot-title">Input Spikes</span>
+                        <span class="plot-badge">16×16</span>
+                    </div>
+                    <div class="canvas-wrapper">
+                        <canvas id="inputChart" class="chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="plot-container glass-panel">
+                    <div class="plot-header">
+                        <span class="plot-title">Output Spikes</span>
+                        <span class="plot-badge">Classes</span>
+                    </div>
+                    <div class="canvas-wrapper">
+                        <canvas id="outputChart" class="chart"></canvas>
+                    </div>
+                    <div class="stats" id="outputStats">Waiting for input...</div>
+                </div>
+
+                <div class="plot-container glass-panel full-width">
+                    <div class="plot-header">
+                        <span class="plot-title">Membrane Voltage (v)</span>
+                        <span class="plot-badge">Trained Neurons</span>
+                    </div>
+                    <div class="canvas-wrapper">
+                        <canvas id="voltageChart" class="chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Drawing ---
+        const canvas = document.getElementById('drawCanvas');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+
+        ctx.fillStyle = "#001122";
+        ctx.fillRect(0, 0, 280, 280);
+        ctx.strokeStyle = "#B59759";
+        ctx.lineWidth = 18;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.shadowColor = "#B59759";
+        ctx.shadowBlur = 6;
+
+        canvas.addEventListener('mousedown', (e) => { isDrawing = true; draw(e); });
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', () => { isDrawing = false; ctx.beginPath(); });
+        canvas.addEventListener('mouseout', () => { isDrawing = false; ctx.beginPath(); });
+
+        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); isDrawing = true; drawTouch(e); });
+        canvas.addEventListener('touchmove', (e) => { e.preventDefault(); drawTouch(e); });
+        canvas.addEventListener('touchend', () => { isDrawing = false; ctx.beginPath(); });
+
+        function draw(e) {
+            if (!isDrawing) return;
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        }
+
+        function drawTouch(e) {
+            if (!isDrawing) return;
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const touch = e.touches[0];
+            const x = (touch.clientX - rect.left) * scaleX;
+            const y = (touch.clientY - rect.top) * scaleY;
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        }
+
+        function clearCanvas() {
+            ctx.fillStyle = "#001122";
+            ctx.fillRect(0, 0, 280, 280);
+            ctx.beginPath();
+            document.getElementById('predictionResult').innerText = "-";
+            document.getElementById('confidenceResult').innerText = "";
+        }
+
+        // --- Word Canvas ---
+        const wordCanvas = document.getElementById('wordCanvas');
+        const wordCtx = wordCanvas.getContext('2d');
+        let isDrawingWord = false;
+
+        wordCtx.fillStyle = "#001122";
+        wordCtx.fillRect(0, 0, 560, 100);
+        wordCtx.strokeStyle = "#B59759";
+        wordCtx.lineWidth = 8;
+        wordCtx.lineCap = "round";
+        wordCtx.lineJoin = "round";
+
+        wordCanvas.addEventListener('mousedown', (e) => { isDrawingWord = true; drawWord(e); });
+        wordCanvas.addEventListener('mousemove', drawWord);
+        wordCanvas.addEventListener('mouseup', () => { isDrawingWord = false; wordCtx.beginPath(); });
+        wordCanvas.addEventListener('mouseout', () => { isDrawingWord = false; wordCtx.beginPath(); });
+
+        function drawWord(e) {
+            if (!isDrawingWord) return;
+            const rect = wordCanvas.getBoundingClientRect();
+            const scaleX = wordCanvas.width / rect.width;
+            const scaleY = wordCanvas.height / rect.height;
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+            wordCtx.lineTo(x, y);
+            wordCtx.stroke();
+            wordCtx.beginPath();
+            wordCtx.moveTo(x, y);
+        }
+
+        function clearWordCanvas() {
+            wordCtx.fillStyle = "#001122";
+            wordCtx.fillRect(0, 0, 560, 100);
+            wordCtx.beginPath();
+            document.getElementById('wordResult').innerHTML = '';
+        }
+
+        function segmentWordCanvas() {
+            // Find vertical gaps to segment characters
+            const imgData = wordCtx.getImageData(0, 0, 560, 100);
+            const colSums = [];
+
+            for (let x = 0; x < 560; x++) {
+                let sum = 0;
+                for (let y = 0; y < 100; y++) {
+                    const idx = (y * 560 + x) * 4;
+                    sum += imgData.data[idx]; // Red channel
+                }
+                colSums.push(sum);
+            }
+
+            // Find character boundaries (gaps where sum < threshold)
+            const threshold = 500;
+            const segments = [];
+            let inChar = false;
+            let startX = 0;
+
+            for (let x = 0; x < 560; x++) {
+                if (!inChar && colSums[x] > threshold) {
+                    inChar = true;
+                    startX = x;
+                } else if (inChar && colSums[x] < threshold) {
+                    inChar = false;
+                    const endX = x;
+                    if (endX - startX > 10) { // Min width
+                        segments.push({ start: startX, end: endX });
+                    }
+                }
+            }
+            // Handle last segment
+            if (inChar) {
+                segments.push({ start: startX, end: 560 });
+            }
+
+            // Extract each segment as 16x16 pixel array
+            const charPixels = [];
+            for (const seg of segments) {
+                const width = seg.end - seg.start;
+
+                // Find vertical bounding box (actual drawn content)
+                let minY = 100, maxY = 0;
+                for (let x = seg.start; x < seg.end; x++) {
+                    for (let y = 0; y < 100; y++) {
+                        const idx = (y * 560 + x) * 4;
+                        if (imgData.data[idx] > 30) {
+                            if (y < minY) minY = y;
+                            if (y > maxY) maxY = y;
+                        }
+                    }
+                }
+
+                // Add some padding
+                minY = Math.max(0, minY - 3);
+                maxY = Math.min(99, maxY + 3);
+                const height = Math.max(maxY - minY + 1, 10);
+
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = 16;
+                tempCanvas.height = 16;
+                const tCtx = tempCanvas.getContext('2d');
+
+                // Draw segment centered and scaled to 16x16 (same as training)
+                tCtx.fillStyle = "#001122";
+                tCtx.fillRect(0, 0, 16, 16);
+
+                // Scale to fill 16x16 while preserving aspect ratio
+                const scaleX = 14 / width;
+                const scaleY = 14 / height;
+                const scale = Math.min(scaleX, scaleY);
+                const drawW = width * scale;
+                const drawH = height * scale;
+                const offsetX = (16 - drawW) / 2;
+                const offsetY = (16 - drawH) / 2;
+
+                tCtx.drawImage(wordCanvas, seg.start, minY, width, height, offsetX, offsetY, drawW, drawH);
+
+                const charImgData = tCtx.getImageData(0, 0, 16, 16);
+                const pixels = [];
+                for (let i = 0; i < 256; i++) {
+                    const intensity = charImgData.data[i * 4];
+                    pixels.push(intensity > 30 ? intensity / 255.0 : 0);
+                }
+                charPixels.push(pixels);
+            }
+
+            return charPixels;
+        }
+
+        async function testWord() {
+            const segments = segmentWordCanvas();
+
+            if (segments.length === 0) {
+                document.getElementById('wordResult').innerHTML =
+                    '<div class="details">No characters detected. Draw a word!</div>';
+                return;
+            }
+
+            document.getElementById('wordResult').innerHTML =
+                '<div class="details">Recognizing ' + segments.length + ' characters...</div>';
+
+            const response = await fetch('/api/word_test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ segments: segments })
+            });
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                document.getElementById('wordResult').innerHTML =
+                    '<div class="letters">' + data.word + '</div>' +
+                    '<div class="details">Characters: ' + data.predictions.join(' ') + '</div>';
+            } else {
+                document.getElementById('wordResult').innerHTML =
+                    '<div class="details">Error: ' + data.message + '</div>';
+            }
+        }
+
+        // --- 16x16 Grid ---
+        function getPixelGrid() {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = 16;
+            tempCanvas.height = 16;
+            const tCtx = tempCanvas.getContext('2d');
+            tCtx.drawImage(canvas, 0, 0, 16, 16);
+            const imgData = tCtx.getImageData(0, 0, 16, 16);
+            const pixels = [];
+            for (let i = 0; i < 256; i++) {
+                const intensity = imgData.data[i * 4];
+                pixels.push(intensity > 30 ? intensity / 255.0 : 0);
+            }
+            return pixels;
+        }
+
+        // --- Classes ---
+        let knownLabels = {};
+
+        function updateKnownClassesUI() {
+            const container = document.getElementById('knownClassesList');
+            const entries = Object.entries(knownLabels);
+            if (entries.length === 0) {
+                container.innerHTML = '<span style="color: rgba(86, 159, 211, 0.5);">None yet</span>';
+            } else {
+                container.innerHTML = entries
+                    .map(([idx, label]) => `<span class="class-tag">${label}</span>`)
+                    .join('');
+            }
+        }
+
+        // --- API ---
+        async function train() {
+            const pixels = getPixelGrid();
+            let label = document.getElementById('trainLabel').value.trim().toUpperCase();
+            if (!label) { alert("Please enter a label!"); return; }
+
+            document.getElementById('predictionResult').innerText = "...";
+            document.getElementById('confidenceResult').innerText = `Training "${label}"`;
+
+            const response = await fetch('/api/train', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pixels: pixels, label: label, repetitions: 10 })
+            });
+            const data = await response.json();
+            updatePlots(data.results);
+
+            for (const [lbl, idx] of Object.entries(data.mapping)) {
+                knownLabels[idx] = lbl;
+            }
+            updateKnownClassesUI();
+
+            document.getElementById('predictionResult').innerText = `✓ ${label}`;
+            document.getElementById('confidenceResult').innerText = "Trained";
+        }
+
+        async function predict() {
+            const pixels = getPixelGrid();
+            document.getElementById('predictionResult').innerText = "...";
+
+            const response = await fetch('/api/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pixels: pixels })
+            });
+            const data = await response.json();
+            updatePlots(data.results);
+
+            const labelMap = data.mapping || {};
+            const trainedIndices = Object.keys(labelMap).map(Number);
+            const spikeCounts = data.spike_counts || [];
+
+            const trainedCounts = {};
+            let maxCount = 0;
+            let winnerIdx = -1;
+
+            for (const idx of trainedIndices) {
+                const count = spikeCounts[idx] || 0;
+                trainedCounts[labelMap[idx]] = count;
+                if (count > maxCount) {
+                    maxCount = count;
+                    winnerIdx = idx;
+                }
+            }
+
+            const winnerLabel = winnerIdx !== -1 ? labelMap[winnerIdx] : null;
+
+            if (!winnerLabel || maxCount <= 0) {
+                document.getElementById('predictionResult').innerText = "?";
+                document.getElementById('confidenceResult').innerText = "No prediction";
+                document.getElementById('feedbackPanel').style.display = 'none';
+            } else {
+                document.getElementById('predictionResult').innerText = winnerLabel;
+                document.getElementById('confidenceResult').innerText = `${maxCount} spikes`;
+                // Show feedback panel
+                document.getElementById('feedbackPanel').style.display = 'block';
+                document.getElementById('wrongInputPanel').style.display = 'none';
+                document.getElementById('feedbackStatus').innerText = '';
+            }
+
+            document.getElementById('outputStats').innerText = `Spikes: ${JSON.stringify(trainedCounts)}`;
+        }
+
+        function showWrongInput() {
+            document.getElementById('wrongInputPanel').style.display = 'flex';
+            document.getElementById('correctLabel').focus();
+        }
+
+        async function feedbackCorrect() {
+            document.getElementById('feedbackStatus').innerText = 'Reinforcing...';
+
+            const response = await fetch('/api/feedback/correct', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await response.json();
+
+            if (data.status === 'reinforced') {
+                document.getElementById('feedbackStatus').innerText = `✓ Reinforced "${data.label}"`;
+                document.getElementById('feedbackStatus').style.color = '#7fb069';
+            } else {
+                document.getElementById('feedbackStatus').innerText = 'Error: ' + (data.message || 'Unknown');
+                document.getElementById('feedbackStatus').style.color = '#e07070';
+            }
+
+            // Hide panel after short delay
+            setTimeout(() => {
+                document.getElementById('feedbackPanel').style.display = 'none';
+            }, 1500);
+        }
+
+        async function feedbackWrong() {
+            const correctLabel = document.getElementById('correctLabel').value.trim().toUpperCase();
+            if (!correctLabel) {
+                alert('Please enter the correct label');
+                return;
+            }
+
+            document.getElementById('feedbackStatus').innerText = 'Correcting...';
+
+            const response = await fetch('/api/feedback/wrong', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ correct_label: correctLabel })
+            });
+            const data = await response.json();
+
+            if (data.status === 'corrected') {
+                document.getElementById('feedbackStatus').innerText =
+                    `✓ Corrected: ${data.wrong_label} → ${data.correct_label}`;
+                document.getElementById('feedbackStatus').style.color = '#7fb069';
+
+                // Update known labels
+                for (const [lbl, idx] of Object.entries(data.mapping)) {
+                    knownLabels[idx] = lbl;
+                }
+                updateKnownClassesUI();
+            } else {
+                document.getElementById('feedbackStatus').innerText = 'Error: ' + (data.message || 'Unknown');
+                document.getElementById('feedbackStatus').style.color = '#e07070';
+            }
+
+            document.getElementById('correctLabel').value = '';
+            document.getElementById('wrongInputPanel').style.display = 'none';
+
+            setTimeout(() => {
+                document.getElementById('feedbackPanel').style.display = 'none';
+            }, 2000);
+        }
+
+        async function resetNetwork() {
+            if (!confirm("Reset will clear all training. Continue?")) return;
+            await fetch('/api/reset', { method: 'POST' });
+            knownLabels = {};
+            updateKnownClassesUI();
+            clearCanvas();
+            document.getElementById('outputStats').innerText = "Network reset.";
+        }
+
+        // --- Charts ---
+        let inputChart = null;
+        let outputChart = null;
+        let voltageChart = null;
+
+        function initCharts() {
+            const chartOptions = {
+                animation: false,
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } }
+            };
+
+            inputChart = new Chart(document.getElementById('inputChart').getContext('2d'), {
+                type: 'scatter',
+                data: { datasets: [{ data: [], backgroundColor: '#569FD3', pointRadius: 1.5 }] },
+                options: {
+                    ...chartOptions,
+                    scales: {
+                        x: { title: { display: true, text: 'Time', color: '#569FD3' }, grid: { color: 'rgba(86,159,211,0.1)' }, ticks: { color: '#569FD3' } },
+                        y: { title: { display: true, text: 'Neuron', color: '#569FD3' }, grid: { color: 'rgba(86,159,211,0.1)' }, ticks: { color: '#569FD3' }, max: 256 }
+                    }
+                }
+            });
+
+            outputChart = new Chart(document.getElementById('outputChart').getContext('2d'), {
+                type: 'scatter',
+                data: { datasets: [{ data: [], backgroundColor: '#B59759', pointRadius: 4 }] },
+                options: {
+                    ...chartOptions,
+                    scales: {
+                        x: { title: { display: true, text: 'Time', color: '#569FD3' }, grid: { color: 'rgba(86,159,211,0.1)' }, ticks: { color: '#569FD3' } },
+                        y: { title: { display: true, text: 'Neuron', color: '#569FD3' }, grid: { color: 'rgba(86,159,211,0.1)' }, ticks: { color: '#569FD3' }, max: 20 }
+                    }
+                }
+            });
+
+            voltageChart = new Chart(document.getElementById('voltageChart').getContext('2d'), {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: {
+                    animation: false,
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { title: { display: true, text: 'Time Step', color: '#569FD3' }, grid: { color: 'rgba(86,159,211,0.1)' }, ticks: { color: '#569FD3' } },
+                        y: { title: { display: true, text: 'v', color: '#569FD3' }, grid: { color: 'rgba(86,159,211,0.1)' }, ticks: { color: '#569FD3' } }
+                    },
+                    plugins: { legend: { display: true, position: 'top', labels: { color: '#B59759' } } },
+                    elements: { point: { radius: 0 } }
+                }
+            });
+        }
+
+        function updatePlots(results) {
+            // Input spikes
+            const inputData = results.input.t.map((t, i) => ({ x: t, y: results.input.i[i] }));
+            inputChart.data.datasets[0].data = inputData;
+            inputChart.update();
+
+            // Output spikes
+            const outputData = results.output.t.map((t, i) => ({ x: t, y: results.output.i[i] }));
+            outputChart.data.datasets[0].data = outputData;
+            outputChart.update();
+
+            // Voltage - show ALL trained neurons (not limited to 5)
+            const voltageHistory = results.voltage_history || [];
+            if (voltageHistory.length > 0) {
+                const labels = voltageHistory.map((_, i) => i);
+                const trainedNeurons = Object.keys(knownLabels).map(Number);
+                const colors = ['#B59759', '#569FD3', '#7fb069', '#e07070', '#9b59b6',
+                    '#f39c12', '#1abc9c', '#e74c3c', '#3498db', '#9b59b6'];
+
+                const datasets = trainedNeurons.map((neuronIdx, i) => ({
+                    label: knownLabels[neuronIdx] || `N${neuronIdx}`,
+                    data: voltageHistory.map(step => step[neuronIdx] || 0),
+                    borderColor: colors[i % colors.length],
+                    borderWidth: 2,
+                    tension: 0.1,
+                    fill: false
+                }));
+
+                voltageChart.data.labels = labels;
+                voltageChart.data.datasets = datasets;
+                voltageChart.update();
+            }
+        }
+
+        // Initialize charts
+        initCharts();
+
+        // Load initial state from server
+        async function loadInitialState() {
+            try {
+                const response = await fetch('/api/state');
+                const data = await response.json();
+
+                // Populate known labels from server
+                for (const [idx, label] of Object.entries(data.labels)) {
+                    knownLabels[idx] = label;
+                }
+                updateKnownClassesUI();
+
+                if (data.trained_count > 0) {
+                    document.getElementById('outputStats').innerText =
+                        `Model loaded. ${Object.keys(data.labels).length} classes trained.`;
+                }
+            } catch (e) {
+                console.log('Could not load initial state:', e);
+            }
+        }
+
+        loadInitialState();
+    </script>
+</body>
+
+</html>

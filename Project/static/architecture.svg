@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="800" height="500">
+  <defs>
+    <!-- Gradients -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#001a33"/>
+      <stop offset="50%" style="stop-color:#00447C"/>
+      <stop offset="100%" style="stop-color:#002244"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#B59759"/>
+      <stop offset="100%" style="stop-color:#d4b06a"/>
+    </linearGradient>
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#569FD3"/>
+      <stop offset="100%" style="stop-color:#00447C"/>
+    </linearGradient>
+    
+    <!-- Neuron symbol -->
+    <symbol id="neuron" viewBox="0 0 30 30">
+      <circle cx="15" cy="15" r="12" fill="url(#goldGrad)" stroke="#B59759" stroke-width="2"/>
+      <circle cx="15" cy="15" r="6" fill="#001a33" opacity="0.5"/>
+    </symbol>
+    
+    <!-- Arrow marker -->
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#569FD3"/>
+    </marker>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="800" height="500" fill="url(#bgGrad)"/>
+  
+  <!-- Title -->
+  <text x="400" y="40" text-anchor="middle" font-family="Inter, sans-serif" font-size="24" font-weight="700" fill="#FFFFFF">Motor Cortical Network Architecture</text>
+  <text x="400" y="65" text-anchor="middle" font-family="Inter, sans-serif" font-size="14" fill="#569FD3">Template-Based Supervised SNN for OCR</text>
+  
+  <!-- INPUT LAYER -->
+  <rect x="30" y="100" width="140" height="280" rx="15" fill="rgba(86,159,211,0.2)" stroke="#569FD3" stroke-width="2"/>
+  <text x="100" y="130" text-anchor="middle" font-family="Inter, sans-serif" font-size="16" font-weight="600" fill="#FFFFFF">Input Layer</text>
+  <text x="100" y="150" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" fill="#569FD3">16×16 = 256 neurons</text>
+  
+  <!-- Input Grid (4x4 sample) -->
+  <g transform="translate(50, 170)">
+    <rect x="0" y="0" width="100" height="100" fill="#001122" rx="8" stroke="#569FD3" stroke-width="1"/>
+    <!-- Grid lines -->
+    <line x1="25" y1="0" x2="25" y2="100" stroke="#569FD3" stroke-width="0.5" opacity="0.3"/>
+    <line x1="50" y1="0" x2="50" y2="100" stroke="#569FD3" stroke-width="0.5" opacity="0.3"/>
+    <line x1="75" y1="0" x2="75" y2="100" stroke="#569FD3" stroke-width="0.5" opacity="0.3"/>
+    <line x1="0" y1="25" x2="100" y2="25" stroke="#569FD3" stroke-width="0.5" opacity="0.3"/>
+    <line x1="0" y1="50" x2="100" y2="50" stroke="#569FD3" stroke-width="0.5" opacity="0.3"/>
+    <line x1="0" y1="75" x2="100" y2="75" stroke="#569FD3" stroke-width="0.5" opacity="0.3"/>
+    <!-- Sample "3" pattern -->
+    <rect x="30" y="10" width="40" height="8" fill="#B59759" rx="2"/>
+    <rect x="60" y="18" width="10" height="20" fill="#B59759" rx="2"/>
+    <rect x="35" y="43" width="35" height="8" fill="#B59759" rx="2"/>
+    <rect x="60" y="51" width="10" height="22" fill="#B59759" rx="2"/>
+    <rect x="30" y="73" width="40" height="8" fill="#B59759" rx="2"/>
+  </g>
+  
+  <text x="100" y="295" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#569FD3">Poisson Encoding</text>
+  <text x="100" y="310" text-anchor="middle" font-family="Inter, sans-serif" font-size="10" fill="#569FD3" opacity="0.8">Pixel intensity → Spike rate</text>
+  
+  <!-- Connection arrows (Input → Output) -->
+  <g stroke="#569FD3" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <path d="M 170 200 Q 280 150 380 180" opacity="0.6"/>
+    <path d="M 170 240 Q 280 240 380 240" opacity="0.8"/>
+    <path d="M 170 280 Q 280 330 380 300" opacity="0.6"/>
+  </g>
+  
+  <!-- Weight labels -->
+  <text x="275" y="185" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#B59759">Weights (Templates)</text>
+  <text x="275" y="200" text-anchor="middle" font-family="Inter, sans-serif" font-size="10" fill="#569FD3">Learned via supervised</text>
+  <text x="275" y="215" text-anchor="middle" font-family="Inter, sans-serif" font-size="10" fill="#569FD3">template matching</text>
+  
+  <!-- OUTPUT LAYER -->
+  <rect x="380" y="100" width="180" height="280" rx="15" fill="rgba(181,151,89,0.2)" stroke="#B59759" stroke-width="2"/>
+  <text x="470" y="130" text-anchor="middle" font-family="Inter, sans-serif" font-size="16" font-weight="600" fill="#FFFFFF">Output Layer</text>
+  <text x="470" y="150" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" fill="#B59759">20 Class Neurons</text>
+  
+  <!-- Output neurons -->
+  <g transform="translate(400, 170)">
+    <use href="#neuron" x="20" y="0" width="30" height="30"/>
+    <text x="60" y="20" font-family="Inter, sans-serif" font-size="12" fill="#FFFFFF">Class "3"</text>
+    
+    <use href="#neuron" x="20" y="45" width="30" height="30"/>
+    <text x="60" y="65" font-family="Inter, sans-serif" font-size="12" fill="#FFFFFF">Class "E"</text>
+    
+    <use href="#neuron" x="20" y="90" width="30" height="30"/>
+    <text x="60" y="110" font-family="Inter, sans-serif" font-size="12" fill="#FFFFFF">Class "A"</text>
+    
+    <text x="35" y="150" font-family="Inter, sans-serif" font-size="14" fill="#569FD3">...</text>
+  </g>
+  
+  <!-- Lateral Inhibition -->
+  <g transform="translate(430, 190)">
+    <path d="M 0 0 Q -20 30 0 60" stroke="#e07070" stroke-width="1.5" fill="none" stroke-dasharray="4,2"/>
+    <path d="M 0 60 Q -20 90 0 120" stroke="#e07070" stroke-width="1.5" fill="none" stroke-dasharray="4,2"/>
+    <circle cx="-15" cy="30" r="8" fill="none" stroke="#e07070" stroke-width="1"/>
+    <line x1="-19" y1="30" x2="-11" y2="30" stroke="#e07070" stroke-width="1.5"/>
+  </g>
+  <text x="400" y="350" text-anchor="start" font-family="Inter, sans-serif" font-size="10" fill="#e07070">Lateral Inhibition</text>
+  <text x="400" y="362" text-anchor="start" font-family="Inter, sans-serif" font-size="9" fill="#e07070" opacity="0.8">(Winner-Take-All)</text>
+  
+  <!-- FEEDBACK SYSTEM -->
+  <rect x="600" y="100" width="170" height="280" rx="15" fill="rgba(127,176,105,0.2)" stroke="#7fb069" stroke-width="2"/>
+  <text x="685" y="130" text-anchor="middle" font-family="Inter, sans-serif" font-size="16" font-weight="600" fill="#FFFFFF">Feedback Learning</text>
+  
+  <g transform="translate(620, 155)">
+    <!-- Correct -->
+    <rect x="0" y="0" width="130" height="50" rx="8" fill="rgba(127,176,105,0.3)" stroke="#7fb069"/>
+    <text x="65" y="20" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" fill="#7fb069">✓ Correct</text>
+    <text x="65" y="38" text-anchor="middle" font-family="Inter, sans-serif" font-size="10" fill="#FFFFFF" opacity="0.8">Reinforce template</text>
+    
+    <!-- Wrong -->
+    <rect x="0" y="70" width="130" height="50" rx="8" fill="rgba(224,112,112,0.3)" stroke="#e07070"/>
+    <text x="65" y="90" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" fill="#e07070">✗ Wrong</text>
+    <text x="65" y="108" text-anchor="middle" font-family="Inter, sans-serif" font-size="10" fill="#FFFFFF" opacity="0.8">Correct and punish</text>
+    
+    <!-- Adaptive -->
+    <rect x="0" y="140" width="130" height="50" rx="8" fill="rgba(86,159,211,0.3)" stroke="#569FD3"/>
+    <text x="65" y="160" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#569FD3">Adaptive LIF</text>
+    <text x="65" y="178" text-anchor="middle" font-family="Inter, sans-serif" font-size="10" fill="#FFFFFF" opacity="0.8">θ increases on spike</text>
+  </g>
+  
+  <!-- Feedback arrow -->
+  <path d="M 560 240 L 600 240" stroke="#7fb069" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  
+  <!-- BOTTOM INFO -->
+  <rect x="30" y="410" width="740" height="70" rx="10" fill="rgba(0,26,51,0.5)" stroke="#569FD3" stroke-width="1"/>
+  
+  <text x="50" y="435" font-family="Inter, sans-serif" font-size="13" font-weight="600" fill="#B59759">Key Components:</text>
+  <text x="50" y="460" font-family="Inter, sans-serif" font-size="11" fill="#FFFFFF">• LIF Neurons (τ=10ms, θ=0.8)</text>
+  <text x="250" y="460" font-family="Inter, sans-serif" font-size="11" fill="#FFFFFF">• Cosine Similarity Matching</text>
+  <text x="480" y="460" font-family="Inter, sans-serif" font-size="11" fill="#FFFFFF">• Online Learning with Feedback</text>
+  
+  <text x="50" y="475" font-family="Inter, sans-serif" font-size="11" fill="#569FD3">• Poisson Rate Encoding</text>
+  <text x="250" y="475" font-family="Inter, sans-serif" font-size="11" fill="#569FD3">• Template-Based Classification</text>
+  <text x="480" y="475" font-family="Inter, sans-serif" font-size="11" fill="#569FD3">• Model Persistence (.pkl)</text>
+</svg>
