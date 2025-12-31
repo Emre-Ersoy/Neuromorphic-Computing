@@ -1,11 +1,20 @@
-from flask import Flask, render_template, jsonify, request
-from snn_core import snn_model
-import numpy as np
-from PIL import Image
+import random
+import os
+import json
 import io
 import base64
+from flask import Flask, render_template, request, jsonify
+from snn_core import OCRSNN
+from word_processor import process_word_image
+import numpy as np
+from PIL import Image
 
 app = Flask(__name__)
+
+# Initialize SNN Model
+snn_model = OCRSNN()
+if os.path.exists("ocr_snn_model.pkl"):
+    snn_model.load()
 
 # Store last prediction for feedback
 last_prediction = {
@@ -35,10 +44,9 @@ def train():
     pixels = data.get('pixels', [])
     label = data.get('label', '0').strip().upper()
     
-    spike_counts = snn_model.train_step(pixels, label)
+    spike_counts, voltage_history, spike_times, input_spike_times = snn_model.train_step(pixels, label)
     snn_model.save()
     
-    _, voltage_history, spike_times, input_spike_times = snn_model.predict(pixels)[1:]
     results = format_spike_data(spike_times, input_spike_times, voltage_history)
     
     stats = snn_model.get_stats()
@@ -48,8 +56,10 @@ def train():
         'label': label,
         'mapping': snn_model.label_map,
         'stats': stats,
-        'results': results
+        'results': results,
+        'spike_counts': spike_counts
     })
+
 
 @app.route('/api/predict', methods=['POST'])
 def predict():
@@ -57,7 +67,7 @@ def predict():
     data = request.json
     pixels = data.get('pixels', [])
     
-    winner_label, spike_counts, voltage_history, spike_times, input_spike_times = snn_model.predict(pixels)
+    winner_label, winner_score, spike_counts, voltage_history, spike_times, input_spike_times = snn_model.predict(pixels, visual_mode=True)
     
     # Store for feedback
     last_prediction['pixels'] = pixels
@@ -68,6 +78,7 @@ def predict():
     return jsonify({
         'status': 'predicted',
         'winner': winner_label,
+        'confidence': float(winner_score),
         'mapping': snn_model.get_labels(),
         'spike_counts': spike_counts,
         'results': results
@@ -118,6 +129,8 @@ def feedback_wrong():
     data = request.json
     correct_label = data.get('correct_label', '').strip().upper()
     
+    wrong_label = last_prediction['predicted_label']
+    
     if not correct_label:
         return jsonify({'status': 'error', 'message': 'No correct label provided'})
     
@@ -132,7 +145,7 @@ def feedback_wrong():
     
     return jsonify({
         'status': 'corrected' if success else 'error',
-        'wrong_label': last_prediction['predicted_label'],
+        'wrong_label': wrong_label,
         'correct_label': correct_label,
         'mapping': snn_model.label_map,
         'stats': snn_model.get_stats()
@@ -144,33 +157,94 @@ def reset():
     return jsonify({'status': 'reset'})
 
 def format_spike_data(spike_times, input_spike_times, voltage_history):
-    input_t = []
-    input_i = []
+    # Format input spikes as list of objects
+    input_spikes = []
     for neuron_idx, times in input_spike_times.items():
         for t in times:
-            input_t.append(float(t) / 100.0)
-            input_i.append(int(neuron_idx))
-    input_spikes = {'t': input_t, 'i': input_i}
-    
-    output_t = []
-    output_i = []
+            input_spikes.append({
+                't': float(t) / 100.0, 
+                'neuron_idx': int(neuron_idx)
+            })
+            
+    # Format output spikes
+    output_spikes = []
     for neuron_idx, times in spike_times.items():
         for t in times:
-            output_t.append(float(t) / 100.0)
-            output_i.append(int(neuron_idx))
-    output_spikes = {'t': output_t, 'i': output_i}
-    
+            output_spikes.append({
+                't': float(t) / 100.0,
+                'neuron_idx': int(neuron_idx)
+            })
+            
     # Convert voltage history to native Python floats
     voltage_native = []
     for step in voltage_history:
         voltage_native.append([float(v) for v in step])
-    
+        
     return {
-        'input': input_spikes,
-        'hidden': {'t': [], 'i': []},
-        'output': output_spikes,
+        'input_spikes': input_spikes,
+        'output_spikes': output_spikes,
         'voltage_history': voltage_native
     }
+
+@app.route('/api/test_word', methods=['POST'])
+def test_word():
+    data = request.json
+    image_data = data['image'] # Base64 string
+    
+    # Remove header if present
+    if ',' in image_data:
+        image_data = image_data.split(',')[1]
+        
+    try:
+        # Decode image
+        image_bytes = base64.b64decode(image_data)
+        image_file = io.BytesIO(image_bytes)
+        
+        # Process word
+        segments = process_word_image(image_file)
+        
+        results = []
+        for seg in segments:
+            pixels = seg['pixels']
+            bbox = seg['bbox']
+            
+            # Run inference
+            # Ensure reset states to prevent leakage between letters
+            snn_model.reset_states()
+            # Use return_all=True to get class_scores (KNN Similarity) which is stable/deterministic
+            spike_counts, _, _, _, class_scores = snn_model.run_inference(pixels, return_all=True)
+            
+            # Get winner based on SIMILARITY (Stable), not Spikes (Stochastic)
+            winner_label = None
+            max_spikes = max(spike_counts) if spike_counts else 0
+            
+            if class_scores:
+                # Deterministic winner
+                winner_label = max(class_scores, key=class_scores.get)
+                # Confidence based on similarity (0-1)
+                confidence = float(class_scores[winner_label])
+            else:
+                 # Fallback to spikes if no classes defined
+                 if spike_counts and max_spikes > 0:
+                     winners = [i for i, c in enumerate(spike_counts) if c == max_spikes]
+                     winner_idx = winners[0]
+                     winner_label = snn_model.neuron_labels.get(winner_idx)
+                     confidence = max_spikes / 50.0
+                 else:
+                     confidence = 0.0
+                
+            results.append({
+                'bbox': bbox,
+                'label': winner_label if winner_label else "?",
+                'confidence': confidence,
+                'spikes': max_spikes
+            })
+            
+        return jsonify({'status': 'success', 'segments': results})
+        
+    except Exception as e:
+        print(f"Error in word test: {e}")
+        return jsonify({'status': 'error', 'message': str(e)})
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5003)

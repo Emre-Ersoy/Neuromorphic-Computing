@@ -544,7 +544,7 @@
                         <span class="control-label">Training Label</span>
                         <div class="input-row">
                             <input type="text" id="trainLabel" placeholder="A" maxlength="3">
-                            <button class="btn-train" onclick="train()">Train (10x)</button>
+                            <button class="btn-train" onclick="train()">Train (5x Augmented)</button>
                         </div>
                     </div>
 
@@ -587,11 +587,17 @@
 
                     <!-- Word Test Section -->
                     <div class="section-title" style="margin-top: 15px;">Word Test</div>
-                    <div class="word-canvas-container">
-                        <canvas id="wordCanvas" width="560" height="100"></canvas>
+                    <div class="word-canvas-container"
+                        style="position: relative; width: 560px; height: 100px; margin: 0 auto;">
+                        <canvas id="wordCanvas" width="560" height="100"
+                            style="position: absolute; top: 0; left: 0; z-index: 1;"></canvas>
+                        <canvas id="wordOverlay" width="560" height="100"
+                            style="position: absolute; top: 0; left: 0; z-index: 2; pointer-events: none;"></canvas>
                     </div>
                     <div class="word-controls">
-                        <button class="btn-clear" onclick="clearWordCanvas()" style="flex:1;">Clear</button>
+                        <button class="btn-clear" onclick="clearWordCanvas()" style="flex:1;">Clear Canvas</button>
+                        <button class="btn-clear" onclick="clearWordResult()"
+                            style="flex:1; background:rgba(255, 255, 255, 0.1);">Clear Text</button>
                         <button class="btn-predict" onclick="testWord()" style="flex:2;">🔤 TEST WORD</button>
                     </div>
                     <div id="wordResult" class="word-result"></div>
@@ -732,7 +738,10 @@
             wordCtx.fillStyle = "#001122";
             wordCtx.fillRect(0, 0, 560, 100);
             wordCtx.beginPath();
-            document.getElementById('wordResult').innerHTML = '';
+
+            const overlay = document.getElementById('wordOverlay');
+            const oCtx = overlay.getContext('2d');
+            oCtx.clearRect(0, 0, overlay.width, overlay.height);
         }
 
         function segmentWordCanvas() {
@@ -750,34 +759,60 @@
             }
 
             // Find character boundaries (gaps where sum < threshold)
-            const threshold = 500;
+            // 1. DILATION of Vertical Sums (Smearing to bridge gaps)
+            const dilatedSums = new Float32Array(560);
+            for (let x = 0; x < 560; x++) {
+                // Max of neighbors
+                let val = colSums[x];
+                if (x > 0) val = Math.max(val, colSums[x - 1]);
+                if (x < 559) val = Math.max(val, colSums[x + 1]);
+                // Smoother dilation
+                if (x > 1) val = Math.max(val, colSums[x - 2] * 0.5);
+                if (x < 558) val = Math.max(val, colSums[x + 2] * 0.5);
+
+                dilatedSums[x] = val;
+            }
+
+            // Find character boundaries using Dilated Sums
+            // Threshold = 50 (Sensitive)
+            const threshold = 50;
             const segments = [];
             let inChar = false;
             let startX = 0;
 
             for (let x = 0; x < 560; x++) {
-                if (!inChar && colSums[x] > threshold) {
+                if (!inChar && dilatedSums[x] > threshold) {
                     inChar = true;
                     startX = x;
-                } else if (inChar && colSums[x] < threshold) {
-                    inChar = false;
-                    const endX = x;
-                    if (endX - startX > 10) { // Min width
-                        segments.push({ start: startX, end: endX });
+                } else if (inChar && dilatedSums[x] < threshold) {
+                    // Check if real gap
+                    let isGap = true;
+                    // Lookahead 8px (strong bridge for H, E, M)
+                    for (let k = 1; k <= 8 && x + k < 560; k++) {
+                        if (dilatedSums[x + k] > threshold) { isGap = false; break; }
+                    }
+
+                    if (isGap) {
+                        inChar = false;
+                        segments.push({ start: startX, end: x });
                     }
                 }
             }
-            // Handle last segment
             if (inChar) {
                 segments.push({ start: startX, end: 560 });
             }
 
+            // FILTER Step: Discard noise (< 8px)
+            const finalSegments = segments.filter(s => (s.end - s.start) > 8);
+
             // Extract each segment as 16x16 pixel array
             const charPixels = [];
-            for (const seg of segments) {
+
+            // Loop over FINAL segments
+            for (const seg of finalSegments) {
                 const width = seg.end - seg.start;
 
-                // Find vertical bounding box (actual drawn content)
+                // Find vertical bounding box
                 let minY = 100, maxY = 0;
                 for (let x = seg.start; x < seg.end; x++) {
                     for (let y = 0; y < 100; y++) {
@@ -789,9 +824,9 @@
                     }
                 }
 
-                // Add some padding
-                minY = Math.max(0, minY - 3);
-                maxY = Math.min(99, maxY + 3);
+                // Add padding
+                minY = Math.max(0, minY - 2);
+                maxY = Math.min(99, maxY + 2);
                 const height = Math.max(maxY - minY + 1, 10);
 
                 const tempCanvas = document.createElement('canvas');
@@ -799,27 +834,66 @@
                 tempCanvas.height = 16;
                 const tCtx = tempCanvas.getContext('2d');
 
-                // Draw segment centered and scaled to 16x16 (same as training)
-                tCtx.fillStyle = "#001122";
+                // Fill black
+                tCtx.fillStyle = "#000000";
                 tCtx.fillRect(0, 0, 16, 16);
 
-                // Scale to fill 16x16 while preserving aspect ratio
-                const scaleX = 14 / width;
-                const scaleY = 14 / height;
-                const scale = Math.min(scaleX, scaleY);
-                const drawW = width * scale;
-                const drawH = height * scale;
+                // Scale to fit 16x16
+                // Use 12x12 target size (2px padding) -> Standard fit
+                const targetSize = 12;
+                const scaleX = targetSize / width;
+                const scaleY = targetSize / height;
+                const scale = Math.min(scaleX, scaleY); // Preserve Aspect Ratio
+
+                let drawW = width * scale;
+                let drawH = height * scale;
+
                 const offsetX = (16 - drawW) / 2;
                 const offsetY = (16 - drawH) / 2;
 
                 tCtx.drawImage(wordCanvas, seg.start, minY, width, height, offsetX, offsetY, drawW, drawH);
 
+                // --- BOLD FILTER (Dilation) ---
+                // Thicken strokes to match training data
+                const rawImg = tCtx.getImageData(0, 0, 16, 16);
+                const boldData = new Uint8ClampedArray(rawImg.data);
+
+                for (let i = 0; i < 256; i++) {
+                    const row = Math.floor(i / 16);
+                    const col = i % 16;
+                    // If neighbor is bright, brighten me
+                    let maxVal = rawImg.data[i * 4]; // Red channel
+
+                    // Check neighbors (Cross shape)
+                    if (row > 0) maxVal = Math.max(maxVal, rawImg.data[((row - 1) * 16 + col) * 4] * 0.5);
+                    if (row < 15) maxVal = Math.max(maxVal, rawImg.data[((row + 1) * 16 + col) * 4] * 0.5);
+                    if (col > 0) maxVal = Math.max(maxVal, rawImg.data[(row * 16 + col - 1) * 4] * 0.5);
+                    if (col < 15) maxVal = Math.max(maxVal, rawImg.data[(row * 16 + col + 1) * 4] * 0.5);
+
+                    boldData[i * 4] = maxVal;     // R
+                    boldData[i * 4 + 1] = maxVal;   // G
+                    boldData[i * 4 + 2] = maxVal;   // B
+                    boldData[i * 4 + 3] = 255;      // Alpha
+                }
+
+                // Put BOLD image back
+                const boldImg = new ImageData(boldData, 16, 16);
+                tCtx.putImageData(boldImg, 0, 0);
+
                 const charImgData = tCtx.getImageData(0, 0, 16, 16);
                 const pixels = [];
+
                 for (let i = 0; i < 256; i++) {
+                    // Use Red channel intensity
+                    // CRITICAL: Use SAME threshold (30) as getPixelGrid() to ensure consistency
+                    // If we use 50 here and 30 there, faint D's become Broken F's.
                     const intensity = charImgData.data[i * 4];
                     pixels.push(intensity > 30 ? intensity / 255.0 : 0);
                 }
+
+                // If the drawing is off-center (due to crude segmentation), 
+                // we could re-center it here, but strict 12x12 scaling usually handles it.
+                // The key is that we are now feeding 16x16 input just like the Training phase.
                 charPixels.push(pixels);
             }
 
@@ -827,46 +901,157 @@
         }
 
         async function testWord() {
-            const segments = segmentWordCanvas();
-
-            if (segments.length === 0) {
-                document.getElementById('wordResult').innerHTML =
-                    '<div class="details">No characters detected. Draw a word!</div>';
-                return;
-            }
+            // Send FULL Canvas to Backend for Robust Python Processing
+            const imageData = wordCanvas.toDataURL('image/png');
 
             document.getElementById('wordResult').innerHTML =
-                '<div class="details">Recognizing ' + segments.length + ' characters...</div>';
+                '<div class="details">Sending to backend cortex...</div>';
 
-            const response = await fetch('/api/word_test', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ segments: segments })
-            });
-            const data = await response.json();
+            try {
+                const response = await fetch('/api/test_word', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: imageData })
+                });
+                const data = await response.json();
 
-            if (data.status === 'success') {
-                document.getElementById('wordResult').innerHTML =
-                    '<div class="letters">' + data.word + '</div>' +
-                    '<div class="details">Characters: ' + data.predictions.join(' ') + '</div>';
-            } else {
-                document.getElementById('wordResult').innerHTML =
-                    '<div class="details">Error: ' + data.message + '</div>';
+                if (data.status === 'success') {
+                    const segments = data.segments; // [{bbox, label, confidence}, ...]
+
+                    if (segments.length === 0) {
+                        // Optional: Alert or just do nothing
+                        return;
+                    }
+
+                    let resultWord = "";
+                    let detailsHtml = "";
+
+                    // Clear Overlay First
+                    const overlay = document.getElementById('wordOverlay');
+                    const oCtx = overlay.getContext('2d');
+                    oCtx.clearRect(0, 0, overlay.width, overlay.height);
+
+                    // Draw boxes on overlay
+                    segments.forEach(seg => {
+                        const [x, y, w, h] = seg.bbox;
+                        const label = seg.label;
+
+                        // Draw Box
+                        oCtx.strokeStyle = "#569FD3"; // Blue for detection
+                        oCtx.lineWidth = 2;
+                        oCtx.strokeRect(x, y, w, h);
+
+                        // Draw Label
+                        oCtx.fillStyle = "#569FD3";
+                        oCtx.font = "bold 16px monospace";
+                        oCtx.fillText(label, x, y - 5);
+
+                        resultWord += label;
+                        detailsHtml += `<span title="${Math.round(seg.confidence * 100)}%"> ${label} </span>`;
+                    });
+
+                    // Append new result block
+                    const newBlock =
+                        '<div class="result-block" style="display:inline-block; margin-right:10px;">' +
+                        '<div class="letters" style="display:inline;">' + resultWord + '</div>' +
+                        '</div>';
+
+                    // Add space to separate from previous
+                    const resultDiv = document.getElementById('wordResult');
+                    if (resultDiv.innerText.trim().length > 0) {
+                        // Add visual separator if needed? Or just relying on margin
+                    }
+                    resultDiv.insertAdjacentHTML('beforeend', newBlock);
+
+                } else {
+                    document.getElementById('wordResult').insertAdjacentHTML('beforeend', '<span class="error"> Error: ' + data.message + '</span>');
+                }
+            } catch (e) {
+                console.error(e);
+                document.getElementById('wordResult').insertAdjacentHTML('beforeend', '<span class="error"> Err </span>');
             }
         }
 
+        function clearWordResult() {
+            document.getElementById('wordResult').innerHTML = '';
+        }
+        // Brace removed
+
         // --- 16x16 Grid ---
+        // --- 16x16 Grid (Auto-Cropped & Centered) ---
         function getPixelGrid() {
+            // 1. Get full image data
+            const w = canvas.width;
+            const h = canvas.height;
+            const imgData = ctx.getImageData(0, 0, w, h);
+            const data = imgData.data;
+
+            // 2. Find Bounding Box
+            let minX = w, maxX = 0, minY = h, maxY = 0;
+            let found = false;
+
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const idx = (y * w + x) * 4;
+                    // Check alpha (or color) - background is #001122, stroke is #B59759
+                    // Actually, let's just check if it's NOT background.
+                    // Background RGB: 0, 17, 34.
+                    // Stroke is much brighter.
+                    const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+                    if (r > 20 || g > 30 || b > 50) { // Simple threshold check
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                        if (y < minY) minY = y;
+                        if (y > maxY) maxY = y;
+                        found = true;
+                    }
+                }
+            }
+
+            if (!found) {
+                // Return empty if nothing drawn
+                return new Array(256).fill(0);
+            }
+
+            // Add padding to bbox? No, word_processor crops tight.
+            const bboxW = maxX - minX + 1;
+            const bboxH = maxY - minY + 1;
+
+            // 3. Create Square Content (Centered)
+            const dim = Math.max(bboxW, bboxH);
             const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = 16;
-            tempCanvas.height = 16;
+            tempCanvas.width = dim;
+            tempCanvas.height = dim;
             const tCtx = tempCanvas.getContext('2d');
-            tCtx.drawImage(canvas, 0, 0, 16, 16);
-            const imgData = tCtx.getImageData(0, 0, 16, 16);
+
+            // Fill with black (background) since input to SNN expects 0-1 where 1 is stroke
+            tCtx.fillStyle = "black";
+            tCtx.fillRect(0, 0, dim, dim);
+
+            // Draw the cropped stroke
+            // Center it
+            const offsetX = (dim - bboxW) / 2;
+            const offsetY = (dim - bboxH) / 2;
+
+            tCtx.drawImage(canvas, minX, minY, bboxW, bboxH, offsetX, offsetY, bboxW, bboxH);
+
+            // 4. Resize to 16x16
+            const finalCanvas = document.createElement('canvas');
+            finalCanvas.width = 16;
+            finalCanvas.height = 16;
+            const fCtx = finalCanvas.getContext('2d');
+
+            // Use High Quality Scaling? JS default is usually decent.
+            fCtx.drawImage(tempCanvas, 0, 0, 16, 16);
+
+            // 5. Extract Pixels
+            const finalImgData = fCtx.getImageData(0, 0, 16, 16);
             const pixels = [];
             for (let i = 0; i < 256; i++) {
-                const intensity = imgData.data[i * 4];
-                pixels.push(intensity > 30 ? intensity / 255.0 : 0);
+                // Check brightness
+                const r = finalImgData.data[i * 4];
+                // Threshold
+                pixels.push(r > 50 ? 1.0 : 0.0);
             }
             return pixels;
         }
@@ -893,70 +1078,100 @@
             if (!label) { alert("Please enter a label!"); return; }
 
             document.getElementById('predictionResult').innerText = "...";
-            document.getElementById('confidenceResult').innerText = `Training "${label}"`;
+            document.getElementById('confidenceResult').innerText = `Training "${label}"...`;
 
-            const response = await fetch('/api/train', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pixels: pixels, label: label, repetitions: 10 })
-            });
-            const data = await response.json();
-            updatePlots(data.results);
+            try {
+                const response = await fetch('/api/train', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pixels: pixels, label: label, repetitions: 10 })
+                });
 
-            for (const [lbl, idx] of Object.entries(data.mapping)) {
-                knownLabels[idx] = lbl;
+                if (!response.ok) throw new Error(`Server Error: ${response.status}`);
+
+                const data = await response.json();
+                updatePlots(data.results, data.mapping, data.spike_counts, label); // Pass label as winner
+
+                // Populate known labels
+                // data.mapping is {Label: Index} e.g. {'A': 0}
+                for (const [lbl, idx] of Object.entries(data.mapping)) {
+                    knownLabels[idx] = lbl;
+                }
+                updateKnownClassesUI();
+
+                document.getElementById('predictionResult').innerText = `✓ ${label}`;
+                document.getElementById('confidenceResult').innerText = "Trained successfully";
+            } catch (e) {
+                console.error("Training failed:", e);
+                document.getElementById('confidenceResult').innerText = `Error: ${e.message}`;
+                alert(`Training failed: ${e.message}`);
             }
-            updateKnownClassesUI();
-
-            document.getElementById('predictionResult').innerText = `✓ ${label}`;
-            document.getElementById('confidenceResult').innerText = "Trained";
         }
 
         async function predict() {
             const pixels = getPixelGrid();
             document.getElementById('predictionResult').innerText = "...";
 
-            const response = await fetch('/api/predict', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pixels: pixels })
-            });
-            const data = await response.json();
-            updatePlots(data.results);
+            try {
+                const response = await fetch('/api/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pixels: pixels })
+                });
 
-            const labelMap = data.mapping || {};
-            const trainedIndices = Object.keys(labelMap).map(Number);
-            const spikeCounts = data.spike_counts || [];
+                if (!response.ok) throw new Error(`Server Error: ${response.status}`);
 
-            const trainedCounts = {};
-            let maxCount = 0;
-            let winnerIdx = -1;
+                const data = await response.json();
 
-            for (const idx of trainedIndices) {
-                const count = spikeCounts[idx] || 0;
-                trainedCounts[labelMap[idx]] = count;
-                if (count > maxCount) {
-                    maxCount = count;
-                    winnerIdx = idx;
+                // 1. Update Text UI First (Critical Path)
+                const winnerLabel = data.winner;
+                // Use backend confidence directly
+                const confidence = data.confidence;
+
+                if (!winnerLabel || confidence < 0.1) {
+                    document.getElementById('predictionResult').innerText = "?";
+                    document.getElementById('confidenceResult').innerText = "No prediction";
+                    document.getElementById('feedbackPanel').style.display = 'none';
+                } else {
+                    document.getElementById('predictionResult').innerText = winnerLabel;
+                    const confidencePct = Math.round(confidence * 100);
+
+                    // Show spike info if available
+                    // Find index of winner
+                    const mapping = data.mapping || {};
+                    // Reverse map (Label -> Index)
+                    const labelToIndex = {};
+                    for (const [lbl, idx] of Object.entries(mapping)) labelToIndex[lbl] = idx;
+
+                    const winnerIdx = labelToIndex[winnerLabel];
+                    const spikeCount = (data.spike_counts && winnerIdx !== undefined) ? data.spike_counts[winnerIdx] : 0;
+
+                    if (spikeCount > 0) {
+                        document.getElementById('confidenceResult').innerText = `${spikeCount} spikes (${confidencePct}% match)`;
+                    } else {
+                        document.getElementById('confidenceResult').innerText = `${confidencePct}% match`;
+                    }
+
+                    // Feedback UI
+                    document.getElementById('feedbackPanel').style.display = 'block';
+                    document.getElementById('wrongInputPanel').style.display = 'none';
+                    document.getElementById('feedbackStatus').innerText = '';
                 }
+
+                document.getElementById('outputStats').innerText = `Spikes: ${JSON.stringify(data.spike_counts || [])}`;
+
+                // 2. Update Graphs (Non-Critical)
+                try {
+                    updatePlots(data.results, data.mapping, data.spike_counts, winnerLabel); // Pass actual winner
+                } catch (plotError) {
+                    console.error("Graph update failed:", plotError);
+                }
+
+            } catch (e) {
+                console.error("Prediction failed:", e);
+                document.getElementById('predictionResult').innerText = "Err";
+                document.getElementById('confidenceResult').innerText = `Error: ${e.message}`;
             }
-
-            const winnerLabel = winnerIdx !== -1 ? labelMap[winnerIdx] : null;
-
-            if (!winnerLabel || maxCount <= 0) {
-                document.getElementById('predictionResult').innerText = "?";
-                document.getElementById('confidenceResult').innerText = "No prediction";
-                document.getElementById('feedbackPanel').style.display = 'none';
-            } else {
-                document.getElementById('predictionResult').innerText = winnerLabel;
-                document.getElementById('confidenceResult').innerText = `${maxCount} spikes`;
-                // Show feedback panel
-                document.getElementById('feedbackPanel').style.display = 'block';
-                document.getElementById('wrongInputPanel').style.display = 'none';
-                document.getElementById('feedbackStatus').innerText = '';
-            }
-
-            document.getElementById('outputStats').innerText = `Spikes: ${JSON.stringify(trainedCounts)}`;
         }
 
         function showWrongInput() {
@@ -1089,38 +1304,74 @@
             });
         }
 
-        function updatePlots(results) {
-            // Input spikes
-            const inputData = results.input.t.map((t, i) => ({ x: t, y: results.input.i[i] }));
-            inputChart.data.datasets[0].data = inputData;
+        function updatePlots(data, mapping, spikeCounts = [], winnerLabel = null) {
+            if (!data) return;
+
+            const { input_spikes, output_spikes, voltage_history } = data;
+
+            // --- Input Raster ---
+            const inputDatasets = [{
+                label: 'Input Spikes',
+                data: input_spikes.map(s => ({ x: s.t, y: s.neuron_idx })),
+                backgroundColor: '#569FD3',
+                pointRadius: 2
+            }];
+            inputChart.data.datasets = inputDatasets;
             inputChart.update();
 
-            // Output spikes
-            const outputData = results.output.t.map((t, i) => ({ x: t, y: results.output.i[i] }));
-            outputChart.data.datasets[0].data = outputData;
+            // --- Output Raster ---
+            const outputDatasets = [{
+                label: 'Output Spikes',
+                data: output_spikes.map(s => ({ x: s.t, y: s.neuron_idx })),
+                backgroundColor: '#E27D60',
+                pointRadius: 4
+            }];
+            outputChart.data.datasets = outputDatasets;
+            outputChart.options.scales.y.max = Object.keys(mapping).length;
             outputChart.update();
 
-            // Voltage - show ALL trained neurons (not limited to 5)
-            const voltageHistory = results.voltage_history || [];
-            if (voltageHistory.length > 0) {
-                const labels = voltageHistory.map((_, i) => i);
-                const trainedNeurons = Object.keys(knownLabels).map(Number);
-                const colors = ['#B59759', '#569FD3', '#7fb069', '#e07070', '#9b59b6',
-                    '#f39c12', '#1abc9c', '#e74c3c', '#3498db', '#9b59b6'];
-
-                const datasets = trainedNeurons.map((neuronIdx, i) => ({
-                    label: knownLabels[neuronIdx] || `N${neuronIdx}`,
-                    data: voltageHistory.map(step => step[neuronIdx] || 0),
-                    borderColor: colors[i % colors.length],
-                    borderWidth: 2,
-                    tension: 0.1,
-                    fill: false
-                }));
-
-                voltageChart.data.labels = labels;
-                voltageChart.data.datasets = datasets;
-                voltageChart.update();
+            // --- Voltage Trace ---
+            // Sort: Winner ALWAYS First, then by Spike Count, then by Final Voltage
+            const trainedIndices = Object.values(mapping).map(Number);
+            const indexToLabel = {};
+            for (const [lbl, idx] of Object.entries(mapping)) {
+                indexToLabel[idx] = lbl;
             }
+
+            const finalVolts = voltage_history[voltage_history.length - 1] || [];
+
+            trainedIndices.sort((a, b) => {
+                const labelA = indexToLabel[a];
+                const labelB = indexToLabel[b];
+
+                // Priority 1: The Winner/Target Label
+                if (labelA === winnerLabel) return -1;
+                if (labelB === winnerLabel) return 1;
+
+                // Priority 2: Spike Count (Activity)
+                const spikeA = spikeCounts[a] || 0;
+                const spikeB = spikeCounts[b] || 0;
+                if (spikeB !== spikeA) return spikeB - spikeA;
+
+                // Priority 3: Final Voltage
+                const valA = finalVolts[a] || 0;
+                const valB = finalVolts[b] || 0;
+                return valB - valA;
+            });
+
+            const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#C9CBCF', '#E7E9ED'];
+            const datasets = trainedIndices.map((neuronIdx) => ({
+                label: indexToLabel[neuronIdx] || `N${neuronIdx}`,
+                data: voltage_history.map(step => step[neuronIdx] || 0),
+                borderColor: colors[neuronIdx % colors.length], // Stable Color based on ID
+                borderWidth: 2,
+                tension: 0.1,
+                fill: false
+            }));
+
+            voltageChart.data.labels = voltage_history.map((_, i) => i);
+            voltageChart.data.datasets = datasets;
+            voltageChart.update();
         }
 
         // Initialize charts
@@ -1133,8 +1384,10 @@
                 const data = await response.json();
 
                 // Populate known labels from server
-                for (const [idx, label] of Object.entries(data.labels)) {
-                    knownLabels[idx] = label;
+                // data.labels is {Label: Index} (e.g. {'A': 0})
+                // knownLabels expects {Index: Label} (e.g. {0: 'A'})
+                for (const [labelName, idx] of Object.entries(data.labels)) {
+                    knownLabels[idx] = labelName;
                 }
                 updateKnownClassesUI();
 
