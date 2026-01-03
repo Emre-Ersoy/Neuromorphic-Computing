@@ -127,16 +127,17 @@ cd Homework2
 python snn_classifier.py
 ```
 
-Once running, open your browser and navigate to `http://127.0.0.1:5050` (or the port specified in the console).
+Once running, open your browser and navigate to `http://127.0.0.1:5000` (or the port specified in the console).
 
 ---
 
 ## Concepts Covered
 
-| Concept | Homework 1 (ANN) | Homework 2 (SNN) |
-| :--- | :--- | :--- |
-| **Input Processing** | Static Feature Vector | Temporal Input Stream |
-| **Neuron Model** | Sigmoid Activation | Leaky Integrate-and-Fire (LIF) |
-| **Output** | Probability (0.0 - 1.0) | Spike Counts / Rate Coding |
-| **Biorealism** | Low (Abstract Math) | High (Bio-simulation) |
+| Concept | Homework 1 (ANN) | Homework 2 (SNN) | Project (OCR + Motor Cortex) |
+| :--- | :--- | :--- | :--- |
+| **Input Processing** | Static Feature Vector | Temporal Input Stream | 16×16 Pixel Grid + Gaussian Blur |
+| **Neuron Model** | Sigmoid Activation | Leaky Integrate-and-Fire (LIF) | LIF + 16 Directional Motor Neurons |
+| **Learning** | Backpropagation | Spike-Based Delta Rule | Exemplar-Based K-NN (80 samples/class) |
+| **Output** | Probability (0.0 - 1.0) | Spike Counts / Rate Coding | Character Label + Motor Trajectory |
+| **Biorealism** | Low (Abstract Math) | High (Bio-simulation) | Very High (Visual + Motor Cortex) |
 
