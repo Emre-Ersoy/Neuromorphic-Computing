@@ -43,13 +43,19 @@ def train():
     data = request.json
     pixels = data.get('pixels', [])
     label = data.get('label', '0').strip().upper()
+    stroke_segments = data.get('stroke_segments', None)  # [[points], [points], ...] from canvas
     
-    spike_counts, voltage_history, spike_times, input_spike_times = snn_model.train_step(pixels, label)
+    spike_counts, voltage_history, spike_times, input_spike_times = snn_model.train_step(
+        pixels, label, stroke_segments=stroke_segments
+    )
     snn_model.save()
     
     results = format_spike_data(spike_times, input_spike_times, voltage_history)
     
     stats = snn_model.get_stats()
+    
+    # Include motor memory status
+    has_motor = label in snn_model.motor_cortex.motor_memories
     
     return jsonify({
         'status': 'trained', 
@@ -57,7 +63,8 @@ def train():
         'mapping': snn_model.label_map,
         'stats': stats,
         'results': results,
-        'spike_counts': spike_counts
+        'spike_counts': spike_counts,
+        'has_motor_memory': has_motor
     })
 
 
@@ -81,7 +88,60 @@ def predict():
         'confidence': float(winner_score),
         'mapping': snn_model.get_labels(),
         'spike_counts': spike_counts,
-        'results': results
+        'results': results,
+        'has_motor_memory': winner_label in snn_model.motor_cortex.motor_memories if winner_label else False
+    })
+
+@app.route('/api/motor_reconstruct', methods=['POST'])
+def motor_reconstruct():
+    """
+    Motor Cortex Simulation: Regenerate trajectory for a recognized label.
+    Uses Georgopoulos Population Vector Coding with 16 directional neurons.
+    """
+    data = request.json
+    label = data.get('label', '').strip().upper()
+    
+    if not label:
+        return jsonify({'status': 'error', 'message': 'No label provided'})
+    
+    # Run motor simulation
+    result = snn_model.run_motor_simulation(label)
+    
+    if result['status'] == 'no_plan':
+        return jsonify({
+            'status': 'no_plan',
+            'message': f"No motor memory for '{label}'. Train with stroke data first."
+        })
+    
+    return jsonify({
+        'status': 'success',
+        'label': label,
+        'trajectory': result['trajectory'],
+        'motor_spikes': result['motor_spikes'],
+        'direction_labels': result['direction_labels']
+    })
+
+@app.route('/api/motor_feedback', methods=['POST'])
+def motor_feedback():
+    """
+    Motor Feedback: Remove last motor memory sample for a label.
+    Called when user clicks 'Motor Wrong' button.
+    """
+    data = request.json
+    label = data.get('label', '').strip().upper()
+    
+    if not label:
+        return jsonify({'status': 'error', 'message': 'No label provided'})
+    
+    success = snn_model.motor_cortex.remove_last_sample(label)
+    snn_model.save()  # Persist the change
+    
+    remaining = len(snn_model.motor_cortex.motor_memories.get(label, []))
+    
+    return jsonify({
+        'status': 'removed' if success else 'no_samples',
+        'label': label,
+        'remaining_samples': remaining
     })
 
 @app.route('/api/word_test', methods=['POST'])
@@ -108,18 +168,36 @@ def word_test():
 @app.route('/api/feedback/correct', methods=['POST'])
 def feedback_correct():
     global last_prediction
+    try:
+        data = request.get_json(silent=True) or {}
+    except Exception as e:
+        print(f"JSON parsing error in feedback_correct: {e}")
+        data = {}
+    stroke_segments = data.get('stroke_segments', None)
     
     if last_prediction['pixels'] is None or last_prediction['predicted_label'] is None:
         return jsonify({'status': 'error', 'message': 'No prediction to reinforce'})
     
+    label = last_prediction['predicted_label']
+    
     success = snn_model.reinforce_correct(
         last_prediction['pixels'],
-        last_prediction['predicted_label']
+        label
     )
+    
+    # Also train motor cortex if stroke data provided
+    motor_learned = False
+    if stroke_segments and len(stroke_segments) > 0:
+        motor_learned = snn_model.motor_cortex.store_trajectory(label, stroke_segments)
+        if motor_learned:
+            print(f"Motor trajectory learned from Correct feedback for '{label}'")
+    
+    snn_model.save()
     
     return jsonify({
         'status': 'reinforced' if success else 'error',
-        'label': last_prediction['predicted_label'],
+        'label': label,
+        'motor_learned': motor_learned,
         'stats': snn_model.get_stats()
     })
 
@@ -247,4 +325,4 @@ def test_word():
         return jsonify({'status': 'error', 'message': str(e)})
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5003)
+    app.run(debug=True, host='0.0.0.0', port=5004)

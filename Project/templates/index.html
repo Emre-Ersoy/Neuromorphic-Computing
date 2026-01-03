@@ -641,11 +641,98 @@
                         <canvas id="voltageChart" class="chart"></canvas>
                     </div>
                 </div>
+
+                <!-- Motor Reconstruction Panel -->
+                <div class="plot-container glass-panel full-width">
+                    <div class="plot-header">
+                        <span class="plot-title">Motor Reconstruction</span>
+                        <span class="plot-badge" id="motorBadge">16 Directions</span>
+                    </div>
+                    <div class="canvas-wrapper" style="display: flex; gap: 10px;">
+                        <!-- Trajectory Canvas -->
+                        <div style="flex: 1; position: relative;">
+                            <canvas id="motorCanvas" width="280" height="280"
+                                style="width: 100%; height: 100%; background: #001122; border-radius: 8px;"></canvas>
+                        </div>
+                        <!-- Motor Neuron Activity -->
+                        <div style="flex: 0 0 180px; display: flex; flex-direction: column; justify-content: center;">
+                            <div class="motor-neurons-grid" id="motorNeuronsGrid">
+                                <!-- 16 direction indicators will be populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
+                        <div class="stats" id="motorStats" style="flex: 1;">Draw and predict to see motor
+                            reconstruction...</div>
+                        <button id="motorWrongBtn" onclick="motorWrong()" style="display: none; padding: 6px 16px; background: #c0392b; color: white; 
+                            border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                            🚫 Motor Wrong
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
+    <style>
+        /* Motor Neuron Grid Styles */
+        .motor-neurons-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 4px;
+            padding: 8px;
+            background: rgba(0, 26, 51, 0.5);
+            border-radius: 8px;
+        }
+
+        .motor-neuron {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: rgba(86, 159, 211, 0.6);
+            background: rgba(0, 68, 124, 0.3);
+            border: 1px solid rgba(86, 159, 211, 0.2);
+            border-radius: 50%;
+            transition: all 0.15s ease;
+        }
+
+        .motor-neuron.active {
+            color: #B59759;
+            background: rgba(181, 151, 89, 0.4);
+            border-color: #B59759;
+            box-shadow: 0 0 10px rgba(181, 151, 89, 0.5);
+        }
+    </style>
+
     <script>
+        // --- Multi-Stroke Capture for Motor Cortex ---
+        let allStrokes = [];       // Array of stroke segments: [[points], [points], ...]
+        let currentStroke = [];    // Current stroke being drawn
+        let lastPredictedLabel = null;  // For motor feedback
+        let strokesForFeedback = [];    // Saved strokes when prediction made (for Correct feedback)
+
+        // 16 Direction Labels
+        const DIRECTION_LABELS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+            'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+
+        // Initialize Motor Neuron Grid
+        function initMotorNeuronsGrid() {
+            const grid = document.getElementById('motorNeuronsGrid');
+            grid.innerHTML = '';
+            DIRECTION_LABELS.forEach((label, idx) => {
+                const div = document.createElement('div');
+                div.className = 'motor-neuron';
+                div.id = `motor-neuron-${idx}`;
+                div.textContent = label;
+                grid.appendChild(div);
+            });
+        }
+        initMotorNeuronsGrid();
+
         // --- Drawing ---
         const canvas = document.getElementById('drawCanvas');
         const ctx = canvas.getContext('2d');
@@ -660,14 +747,72 @@
         ctx.shadowColor = "#B59759";
         ctx.shadowBlur = 6;
 
-        canvas.addEventListener('mousedown', (e) => { isDrawing = true; draw(e); });
-        canvas.addEventListener('mousemove', draw);
-        canvas.addEventListener('mouseup', () => { isDrawing = false; ctx.beginPath(); });
-        canvas.addEventListener('mouseout', () => { isDrawing = false; ctx.beginPath(); });
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            currentStroke = [];  // Start new stroke segment
+            capturePoint(e);
+            draw(e);
+        });
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDrawing) capturePoint(e);
+            draw(e);
+        });
+        canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+            ctx.beginPath();
+            // Save completed stroke segment
+            if (currentStroke.length > 1) {
+                allStrokes.push([...currentStroke]);
+                console.log(`Stroke segment saved: ${currentStroke.length} points. Total strokes: ${allStrokes.length}`);
+            }
+        });
+        canvas.addEventListener('mouseout', () => {
+            if (isDrawing && currentStroke.length > 1) {
+                allStrokes.push([...currentStroke]);
+            }
+            isDrawing = false;
+            ctx.beginPath();
+        });
 
-        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); isDrawing = true; drawTouch(e); });
-        canvas.addEventListener('touchmove', (e) => { e.preventDefault(); drawTouch(e); });
-        canvas.addEventListener('touchend', () => { isDrawing = false; ctx.beginPath(); });
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            isDrawing = true;
+            currentStroke = [];
+            captureTouchPoint(e);
+            drawTouch(e);
+        });
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (isDrawing) captureTouchPoint(e);
+            drawTouch(e);
+        });
+        canvas.addEventListener('touchend', () => {
+            isDrawing = false;
+            ctx.beginPath();
+            if (currentStroke.length > 1) {
+                allStrokes.push([...currentStroke]);
+            }
+        });
+
+        // Capture stroke points for motor learning (normalized to [0,1])
+        function capturePoint(e) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = (e.clientX - rect.left) * scaleX / 280.0;  // Normalize to [0,1]
+            const y = (e.clientY - rect.top) * scaleY / 280.0;
+            currentStroke.push([x, y]);
+        }
+
+        function captureTouchPoint(e) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const touch = e.touches[0];
+            const x = (touch.clientX - rect.left) * scaleX / 280.0;  // Normalize to [0,1]
+            const y = (touch.clientY - rect.top) * scaleY / 280.0;
+            currentStroke.push([x, y]);
+        }
 
         function draw(e) {
             if (!isDrawing) return;
@@ -700,8 +845,177 @@
             ctx.fillStyle = "#001122";
             ctx.fillRect(0, 0, 280, 280);
             ctx.beginPath();
+            allStrokes = [];      // Clear all stroke segments
+            currentStroke = [];   // Clear current stroke
+            lastPredictedLabel = null;
             document.getElementById('predictionResult').innerText = "-";
             document.getElementById('confidenceResult').innerText = "";
+            clearMotorCanvas();
+        }
+
+        // --- Motor Canvas ---
+        const motorCanvas = document.getElementById('motorCanvas');
+        const motorCtx = motorCanvas.getContext('2d');
+
+        function clearMotorCanvas() {
+            motorCtx.fillStyle = "#001122";
+            motorCtx.fillRect(0, 0, motorCanvas.width, motorCanvas.height);
+            // Reset neuron indicators
+            DIRECTION_LABELS.forEach((_, idx) => {
+                const el = document.getElementById(`motor-neuron-${idx}`);
+                if (el) el.classList.remove('active');
+            });
+            document.getElementById('motorStats').textContent = 'Draw and predict to see motor reconstruction...';
+        }
+        clearMotorCanvas();
+
+        // Motor Reconstruction Animation
+        async function runMotorReconstruction(label) {
+            document.getElementById('motorStats').textContent = `Running motor simulation for '${label}'...`;
+            document.getElementById('motorWrongBtn').style.display = 'none';
+            lastPredictedLabel = label;
+
+            try {
+                const response = await fetch('/api/motor_reconstruct', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ label: label })
+                });
+                const data = await response.json();
+
+                if (data.status === 'no_plan') {
+                    document.getElementById('motorStats').textContent = data.message;
+                    return;
+                }
+
+                if (data.status === 'success') {
+                    animateTrajectory(data.trajectory, data.motor_spikes);
+                    // Show Motor Wrong button for feedback
+                    document.getElementById('motorWrongBtn').style.display = 'block';
+                }
+            } catch (err) {
+                console.error('Motor reconstruction error:', err);
+                document.getElementById('motorStats').textContent = 'Error: ' + err.message;
+            }
+        }
+
+        async function motorWrong() {
+            if (!lastPredictedLabel) {
+                document.getElementById('motorStats').textContent = 'No motor reconstruction to correct';
+                return;
+            }
+
+            document.getElementById('motorStats').textContent = 'Removing bad motor memory...';
+
+            try {
+                const response = await fetch('/api/motor_feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ label: lastPredictedLabel })
+                });
+                const data = await response.json();
+
+                if (data.status === 'removed') {
+                    document.getElementById('motorStats').textContent =
+                        `Removed bad sample for '${data.label}'. ${data.remaining_samples} samples left. Retrain for better results.`;
+                } else {
+                    document.getElementById('motorStats').textContent =
+                        `No samples to remove for '${data.label}'`;
+                }
+
+                document.getElementById('motorWrongBtn').style.display = 'none';
+                clearMotorCanvas();
+            } catch (err) {
+                console.error('Motor feedback error:', err);
+                document.getElementById('motorStats').textContent = 'Error: ' + err.message;
+            }
+        }
+
+        function animateTrajectory(trajectory, motorSpikes) {
+            clearMotorCanvas();
+
+            if (!trajectory || trajectory.length < 2) {
+                document.getElementById('motorStats').textContent = 'No trajectory data';
+                return;
+            }
+
+            // Scale trajectory to fit canvas
+            const canvasWidth = motorCanvas.width;
+            const canvasHeight = motorCanvas.height;
+            const padding = 40;
+
+            // Find bounds
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            trajectory.forEach(([x, y]) => {
+                minX = Math.min(minX, x);
+                maxX = Math.max(maxX, x);
+                minY = Math.min(minY, y);
+                maxY = Math.max(maxY, y);
+            });
+
+            const rangeX = maxX - minX || 1;
+            const rangeY = maxY - minY || 1;
+            const scale = Math.min((canvasWidth - padding * 2) / rangeX, (canvasHeight - padding * 2) / rangeY);
+            const offsetX = (canvasWidth - rangeX * scale) / 2 - minX * scale;
+            const offsetY = (canvasHeight - rangeY * scale) / 2 - minY * scale;
+
+            let idx = 0;
+            const animSpeed = 30;  // ms per point
+
+            motorCtx.strokeStyle = "#B59759";
+            motorCtx.lineWidth = 3;
+            motorCtx.lineCap = "round";
+            motorCtx.lineJoin = "round";
+            motorCtx.shadowColor = "#B59759";
+            motorCtx.shadowBlur = 4;
+
+            function drawStep() {
+                if (idx >= trajectory.length) {
+                    document.getElementById('motorStats').textContent =
+                        `Motor reconstruction complete (${trajectory.length} points)`;
+                    return;
+                }
+
+                const [x, y] = trajectory[idx];
+                const cx = x * scale + offsetX;
+                const cy = y * scale + offsetY;
+
+                if (idx === 0) {
+                    motorCtx.beginPath();
+                    motorCtx.moveTo(cx, cy);
+                    // Draw start marker
+                    motorCtx.fillStyle = "#569FD3";
+                    motorCtx.beginPath();
+                    motorCtx.arc(cx, cy, 6, 0, Math.PI * 2);
+                    motorCtx.fill();
+                    motorCtx.beginPath();
+                    motorCtx.moveTo(cx, cy);
+                } else {
+                    motorCtx.lineTo(cx, cy);
+                    motorCtx.stroke();
+                    motorCtx.beginPath();
+                    motorCtx.moveTo(cx, cy);
+                }
+
+                // Update motor neuron indicators
+                if (motorSpikes && motorSpikes[idx]) {
+                    DIRECTION_LABELS.forEach((_, nIdx) => {
+                        const el = document.getElementById(`motor-neuron-${nIdx}`);
+                        if (el) {
+                            if (motorSpikes[idx][nIdx]) {
+                                el.classList.add('active');
+                            } else {
+                                el.classList.remove('active');
+                            }
+                        }
+                    });
+                }
+
+                idx++;
+                setTimeout(drawStep, animSpeed);
+            }
+
+            drawStep();
         }
 
         // --- Word Canvas ---
@@ -1080,27 +1394,43 @@
             document.getElementById('predictionResult').innerText = "...";
             document.getElementById('confidenceResult').innerText = `Training "${label}"...`;
 
+            // Count total stroke points
+            const totalPoints = allStrokes.reduce((sum, s) => sum + s.length, 0);
+            console.log(`Training with ${allStrokes.length} strokes, ${totalPoints} total points`);
+
             try {
                 const response = await fetch('/api/train', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pixels: pixels, label: label, repetitions: 10 })
+                    body: JSON.stringify({
+                        pixels: pixels,
+                        label: label,
+                        repetitions: 10,
+                        stroke_segments: allStrokes  // Send multi-stroke data
+                    })
                 });
 
                 if (!response.ok) throw new Error(`Server Error: ${response.status}`);
 
                 const data = await response.json();
-                updatePlots(data.results, data.mapping, data.spike_counts, label); // Pass label as winner
+                updatePlots(data.results, data.mapping, data.spike_counts, label);
 
                 // Populate known labels
-                // data.mapping is {Label: Index} e.g. {'A': 0}
                 for (const [lbl, idx] of Object.entries(data.mapping)) {
                     knownLabels[idx] = lbl;
                 }
                 updateKnownClassesUI();
 
+                // Show motor memory status
+                const motorStatus = data.has_motor_memory ? ' + Motor Plan' : '';
                 document.getElementById('predictionResult').innerText = `✓ ${label}`;
-                document.getElementById('confidenceResult').innerText = "Trained successfully";
+                document.getElementById('confidenceResult').innerText = `Trained${motorStatus} (${allStrokes.length} strokes, ${totalPoints} pts)`;
+
+                // Update motor panel
+                if (data.has_motor_memory) {
+                    document.getElementById('motorStats').textContent =
+                        `Motor memory stored for '${label}' (${allStrokes.length} strokes, ${totalPoints} points)`;
+                }
             } catch (e) {
                 console.error("Training failed:", e);
                 document.getElementById('confidenceResult').innerText = `Error: ${e.message}`;
@@ -1111,6 +1441,9 @@
         async function predict() {
             const pixels = getPixelGrid();
             document.getElementById('predictionResult').innerText = "...";
+
+            // Save current strokes for feedback learning
+            strokesForFeedback = JSON.parse(JSON.stringify(allStrokes));
 
             try {
                 const response = await fetch('/api/predict', {
@@ -1156,13 +1489,21 @@
                     document.getElementById('feedbackPanel').style.display = 'block';
                     document.getElementById('wrongInputPanel').style.display = 'none';
                     document.getElementById('feedbackStatus').innerText = '';
+
+                    // Motor Reconstruction: Auto-trigger if motor memory exists
+                    if (data.has_motor_memory && winnerLabel) {
+                        runMotorReconstruction(winnerLabel);
+                    } else {
+                        document.getElementById('motorStats').textContent =
+                            `No motor memory for '${winnerLabel}'. Train with drawing to enable reconstruction.`;
+                    }
                 }
 
                 document.getElementById('outputStats').innerText = `Spikes: ${JSON.stringify(data.spike_counts || [])}`;
 
                 // 2. Update Graphs (Non-Critical)
                 try {
-                    updatePlots(data.results, data.mapping, data.spike_counts, winnerLabel); // Pass actual winner
+                    updatePlots(data.results, data.mapping, data.spike_counts, winnerLabel);
                 } catch (plotError) {
                     console.error("Graph update failed:", plotError);
                 }
@@ -1180,17 +1521,29 @@
         }
 
         async function feedbackCorrect() {
-            document.getElementById('feedbackStatus').innerText = 'Reinforcing...';
+            document.getElementById('feedbackStatus').innerText = 'Reinforcing + Motor Learning...';
+
+            // Also train motor cortex if we have stroke data
+            const hasStrokes = strokesForFeedback && strokesForFeedback.length > 0;
 
             const response = await fetch('/api/feedback/correct', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    stroke_segments: hasStrokes ? strokesForFeedback : null
+                })
             });
             const data = await response.json();
 
             if (data.status === 'reinforced') {
-                document.getElementById('feedbackStatus').innerText = `✓ Reinforced "${data.label}"`;
+                const motorMsg = data.motor_learned ? ' + Motor Memory' : '';
+                document.getElementById('feedbackStatus').innerText = `✓ Reinforced "${data.label}"${motorMsg}`;
                 document.getElementById('feedbackStatus').style.color = '#7fb069';
+
+                if (data.motor_learned) {
+                    document.getElementById('motorStats').textContent =
+                        `Motor memory learned from feedback for '${data.label}'`;
+                }
             } else {
                 document.getElementById('feedbackStatus').innerText = 'Error: ' + (data.message || 'Unknown');
                 document.getElementById('feedbackStatus').style.color = '#e07070';

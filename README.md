@@ -34,6 +34,73 @@ This project solves the same classification problem but adopts a neuromorphic ap
 
 ---
 
+### 3. Project: Neuromorphic OCR with Motor Cortex Simulation
+**Path:** `Project/`
+
+This is the main project that combines character recognition via SNN with a biologically-inspired motor cortex simulation. The system can learn handwritten characters, recognize them using exemplar-based K-NN, and then reconstruct the trajectory through motor cortex population vector coding.
+
+#### Architecture Overview
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────────┐
+│   Input Layer   │───▶│   Visual Cortex  │───▶│   Motor Cortex      │
+│   (16x16 Grid)  │    │   (SNN + K-NN)   │    │   (16 Dir. Neurons) │
+└─────────────────┘    └──────────────────┘    └─────────────────────┘
+        │                       │                        │
+   Draw Canvas            Classify &              Regenerate
+   (Stroke Points)        Recognize               Trajectory
+```
+
+#### Key Features
+
+*   **Exemplar-Based Learning:**
+    *   Stores up to 80 samples per class (smart pruning removes redundant samples)
+    *   K-NN prediction finds the most similar exemplar across all classes
+    *   Data augmentation with Gaussian blur for topology-based matching
+
+*   **Motor Cortex Simulation (Georgopoulos Population Vector Coding):**
+    *   16 directional LIF neurons (N, NNE, NE, ENE, E, ESE, SE, SSE, S, SSW, SW, WSW, W, WNW, NW, NNW)
+    *   Stores raw trajectory points for each learned character
+    *   Regenerates handwriting by replaying stored trajectories with motor neuron activation
+
+*   **Word Recognition:**
+    *   Segments word images into individual characters using vertical projection profiles
+    *   Recognizes each character independently and combines predictions
+    *   Supports training and testing multi-character sequences
+
+#### Screenshots
+
+**Character Prediction Interface:**
+![Character Prediction](Project/prediction.png)
+
+**Motor Cortex Trajectory Reconstruction:**
+![Motor Reconstruction](Project/motor_reconstruction.png)
+
+**Word Recognition Test:**
+![Word Test](Project/word_test.png)
+
+#### File Structure
+
+| File | Description |
+| :--- | :--- |
+| `app.py` | Flask web application with REST endpoints |
+| `snn_core.py` | OCRSNN class with LIF neurons and exemplar storage |
+| `motor_cortex.py` | MotorCortex class with trajectory storage and population vector coding |
+| `word_processor.py` | Character segmentation from word images |
+| `templates/index.html` | Interactive web UI with drawing canvas |
+
+#### Usage
+
+```bash
+cd Project
+pip install -r requirements.txt
+python app.py
+```
+
+Then open `http://127.0.0.1:5004` in your browser.
+
+---
+
 ## Getting Started
 
 ### Prerequisites

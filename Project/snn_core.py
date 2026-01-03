@@ -1,6 +1,7 @@
 """
 Neuromorphic OCR - Motor Cortical Network
 Exemplar-Based Learning with Smart Pruning + K-NN Prediction
+With Georgopoulos Population Vector Coding for Motor Reconstruction
 """
 import hashlib
 import random
@@ -86,6 +87,10 @@ class OCRSNN:
         
         # Simulation params
         self.time_steps = 50
+        
+        # Motor Cortex for trajectory reconstruction
+        from motor_cortex import MotorCortex
+        self.motor_cortex = MotorCortex()
         
     def _preprocess(self, input_array):
         """
@@ -233,10 +238,11 @@ class OCRSNN:
         samples.pop(i)
         samples.append(merged)
         
-    def train_step(self, input_data, label, repetitions=1):
+    def train_step(self, input_data, label, stroke_segments=None, repetitions=1):
         """
         Add sample to exemplar storage for this class.
         Smart pruning keeps collection diverse.
+        Also captures motor trajectory from stroke segments if provided.
         """
         input_array = np.array(input_data).flatten().astype(np.float32)
         # Use preprocess (blur + norm) instead of just norm
@@ -259,10 +265,23 @@ class OCRSNN:
             self.exemplars[label].append(norm_sample)
             self._smart_prune(label)
         
+        # Motor Cortex: Store raw trajectory for this label
+        if stroke_segments and len(stroke_segments) > 0:
+            success = self.motor_cortex.store_trajectory(label, stroke_segments)
+            if success:
+                print(f"Motor trajectory stored for '{label}' from {len(stroke_segments)} strokes")
+        
         # Run inference for visualization (using ORIGINAL input only)
         # Training -> Always use visual mode for feedback
         spike_counts, voltage_history, spike_times, input_spike_times = self.run_inference(input_data, visual_mode=True)
         return spike_counts, voltage_history, spike_times, input_spike_times
+    
+    def run_motor_simulation(self, label):
+        """
+        Run motor cortex simulation to regenerate trajectory for a recognized label.
+        Uses Georgopoulos Population Vector Coding with 16 directional neurons.
+        """
+        return self.motor_cortex.simulate_trajectory(label)
     
     def run_inference(self, input_data, return_all=False, visual_mode=False):
         """
@@ -463,12 +482,16 @@ class OCRSNN:
         self.neuron_labels = {}
         self.next_label_idx = 0
         
+        # Reset motor cortex memories too
+        from motor_cortex import MotorCortex
+        self.motor_cortex = MotorCortex()
+        
         if os.path.exists(MODEL_FILE):
             os.remove(MODEL_FILE)
         
         # Save the empty state immediately to sync disk
         self.save()
-        print("Network reset and empty model saved.")
+        print("Network reset and empty model saved (including motor memories).")
     
     def save(self):
         try:
@@ -477,11 +500,13 @@ class OCRSNN:
                 'label_map': self.label_map,
                 'neuron_labels': self.neuron_labels,
                 'next_label_idx': self.next_label_idx,
-                'max_exemplars': self.max_exemplars
+                'max_exemplars': self.max_exemplars,
+                'motor_cortex': self.motor_cortex.get_state()  # Save motor memories
             }
             with open(MODEL_FILE, 'wb') as f:
                 pickle.dump(data, f)
-            print(f"Model saved ({sum(len(v) for v in self.exemplars.values())} total exemplars)")
+            motor_count = len(self.motor_cortex.motor_memories)
+            print(f"Model saved ({sum(len(v) for v in self.exemplars.values())} exemplars, {motor_count} motor plans)")
         except Exception as e:
             print(f"Error saving: {e}")
     
@@ -502,6 +527,11 @@ class OCRSNN:
                 self.neuron_labels = data.get('neuron_labels', {})
                 self.next_label_idx = data.get('next_label_idx', 0)
                 self.max_exemplars = data.get('max_exemplars', 80)
+                
+                # Load motor cortex state if available
+                if 'motor_cortex' in data:
+                    self.motor_cortex.set_state(data['motor_cortex'])
+                    print(f"Motor memories loaded ({len(self.motor_cortex.motor_memories)} plans)")
                 
                 total = sum(len(v) for v in self.exemplars.values())
                 print(f"Model loaded ({total} exemplars across {len(self.label_map)} classes)")
