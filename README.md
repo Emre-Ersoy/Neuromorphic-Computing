@@ -97,7 +97,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Then open `http://127.0.0.1:5004` in your browser.
+Then open `http://127.0.0.1:5050` in your browser.
 
 ---
 
@@ -127,7 +127,7 @@ cd Homework2
 python snn_classifier.py
 ```
 
-Once running, open your browser and navigate to `http://127.0.0.1:5000` (or the port specified in the console).
+Once running, open your browser and navigate to `http://127.0.0.1:5050` (or the port specified in the console).
 
 ---
 
